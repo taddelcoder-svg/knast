@@ -1,0 +1,17 @@
+{
+  "name": "knastknacker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Knastknacker – Gefängnisausbruch im Browser für Familie und Freunde, solo oder online bis 10.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/logik.test.js test/raeume.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
