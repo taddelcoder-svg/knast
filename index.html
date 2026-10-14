@@ -365,6 +365,13 @@
 <script src="/js/spiel.js"></script>
 
 <!-- Rangliste der Spielesammlung: meldet Spielzeit, Punkte und Progress -->
+<script>
+window.SLZaehle=function(k,f){try{var s=JSON.parse(localStorage.getItem(k))||{};f(s);localStorage.setItem(k,JSON.stringify(s))}catch(e){}};
+window.SLRangAdapter=function(){
+  var s={};try{s=JSON.parse(localStorage.getItem('sl_knast'))||{}}catch(e){}
+  return{punkte:(s.aus||0)*100+(s.spiele||0)*10,progress:Math.min(100,Object.keys(s.wege||{}).length/5*100)}
+};
+</script>
 <script src="https://rangliste-aoee.onrender.com/melder.js" data-spiel="Knastknacker" defer></script>
 </body>
 </html>
