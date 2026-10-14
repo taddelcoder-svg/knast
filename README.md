@@ -14,6 +14,8 @@ Gefängnisausbruch im Browser (Prinzip wie Cuffbust, eigener Name und eigene Fig
 - **Heli**: Schlüssel im Direktorbüro (rote Tür), Start auf dem Dach, bis zu 4 Leute
 - **Tore**: roter Knopf in der Wachstube öffnet beide Tore 15 s
 
+Extras: Tipp-Anzeige „Nächster Schritt“ (Taste `T`, Ziel auf der Minikarte), Schwierigkeit der Wärter (Solo), Lautstärke und Empfindlichkeit, Statistik am Rundenende, 3D-Hintergrund im Menü.
+
 Modi: jeder für sich, Banden (2er), alle zusammen (kein Prügeln untereinander). Rundenzeit 10/15/20 Minuten.
 
 ## Technik

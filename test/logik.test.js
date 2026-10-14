@@ -227,3 +227,27 @@ test('Ende: Zeit um, Rangliste', () => {
   assert.strictEqual(S.phase, 'ende');
   assert.strictEqual(S.ergebnis.length, 1);
 });
+
+test('Tipp: führt vom leeren Inventar bis zum Schlüssel', () => {
+  const items = [[1, 'loeffel', 80.5, 14, 0], [2, 'schaufel', 35.5, 57.3, 0]];
+  const sp = { x:81, z:15, inv:[] };
+  const t0 = L.tipp(items, sp, true);
+  assert.match(t0.text, /Löffel/); assert.strictEqual(t0.x, 80.5);
+  assert.match(L.tipp(items, { ...sp, inv:['loeffel'] }, true).text, /grab/);
+  assert.match(L.tipp(items, { ...sp, inv:['laken', 'laken'] }, true).text, /Lakenseil/);
+  assert.match(L.tipp(items, { ...sp, inv:['seil'] }, true).text, /Haken/);
+  assert.deepStrictEqual([L.tipp(items, { ...sp, inv:['duenger', 'reiniger'] }, true).x, L.tipp(items, { ...sp, inv:['duenger', 'reiniger'] }, true).z], [KA.OBJ.werkbank.x, KA.OBJ.werkbank.z]);
+  assert.match(L.tipp(items, { ...sp, inv:['drahtschere'] }, false).text, /stromlos/);
+  assert.match(L.tipp(items, { ...sp, inv:['helischluessel'] }, true).text, /Heli/);
+  assert.ok(L.tipp([], { x:0, z:0, inv:[] }, true).text);
+});
+
+test('Schwierigkeit: Wärter werden je Stufe schneller oder langsamer misstrauisch', () => {
+  const rate = stufe => {
+    const S = new L.Spiel({ seed:3, ohneWache:true, schwer:stufe });
+    const sp = S.spielerHinzu('a', 'Ana', 'fuchs'); setze(sp, 50, 8);   // im Todesstreifen
+    return S.verdachtRate({}, sp, 10);
+  };
+  assert.ok(rate('leicht') < rate('normal') && rate('normal') < rate('schwer'));
+  assert.strictEqual(new L.Spiel({ schwer:'quatsch' }).stufe, 'normal');
+});

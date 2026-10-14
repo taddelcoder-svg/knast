@@ -14,10 +14,10 @@
   const touch = matchMedia('(pointer: coarse)').matches || istIpad || new URLSearchParams(location.search).get('touch') === '1';
 
   /* ---------- Einstellungen ---------- */
-  let einst = { name:'', tier:'fuchs', modus:'jeder', dauer:900, grafik:touch ? 'mittel' : 'hoch', ton:true, empf:1 };
+  let einst = { name:'', tier:'fuchs', modus:'jeder', dauer:900, grafik:touch ? 'mittel' : 'hoch', ton:true, empf:1, laut:1, schwer:'normal', tipps:true };
   try { Object.assign(einst, JSON.parse(localStorage.getItem(SPEICHER) || '{}')); } catch (_) { /* egal */ }
   const merken = () => { try { localStorage.setItem(SPEICHER, JSON.stringify(einst)); } catch (_) { /* egal */ } };
-  TON.an(einst.ton);
+  TON.an(einst.ton); TON.laut(einst.laut);
 
   /* ---------- Renderer ---------- */
   const leinwand = $('bild');
@@ -26,6 +26,7 @@
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL[einst.grafik] || 1.5));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
+renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.2;
   const kamera = new T.PerspectiveCamera(65, 1, 0.05, 900);
   function groesse() {
     renderer.setSize(innerWidth, innerHeight, false); kamera.aspect = innerWidth / innerHeight;
@@ -73,7 +74,7 @@
     return { ws, senden:d => { if (ws.readyState === 1) ws.send(JSON.stringify(d)); }, schliessen:() => { try { ws.close(); } catch (_) { /* egal */ } } };
   }
   function lokal() {
-    const spiel = new L.Spiel({ seed:Math.random() * 1e9 >>> 0, modus:'jeder', dauer:einst.dauer });
+    const spiel = new L.Spiel({ seed:Math.random() * 1e9 >>> 0, modus:'jeder', dauer:einst.dauer, schwer:einst.schwer });
     spiel.spielerHinzu('ich', einst.name || 'Ich', einst.tier);
     du = 'ich';
     let v = -1, naechster = performance.now(), aktiv = true;
@@ -124,6 +125,7 @@
   function spielStart() {
     modus = 'spiel';
     zeigeNur('hud');
+    menuSzene = menuWelt = null;
     if (welt) spielAufraeumen();
     szene = new T.Scene();
     szene.fog = new T.FogExp2(0x141a2a, 0.012);
@@ -171,7 +173,7 @@
       if (ich.fz === 'van' && z.van.fahrer === du && !fahr && pos) fahr = { x:pos.van[0], z:pos.van[1], r:pos.van[2], v:pos.van[3] };
       if (!(ich.fz === 'van' && z.van.fahrer === du)) fahr = null;
     }
-    hudZustand();
+    hudZustand(); tippAktualisieren();
     if (z.phase === 'ende' && modus === 'spiel') zeigeEnde();
   }
 
@@ -220,6 +222,7 @@
     else if (k >= '1' && k <= '4') aktion({ a:'hand', i:+k - 1 });
     else if (k === 'm' || e.code === 'Tab') { e.preventDefault(); grosseKarte(!$('karteGross').classList.contains('an')); }
     else if (k === 'h') $('hilfeSpiel').hidden = !$('hilfeSpiel').hidden;
+    else if (k === 't') tippUmschalten();
     else if (e.key === 'Enter') { $('chat').hidden = false; if (document.pointerLockElement) document.exitPointerLock(); setTimeout(() => $('chatEin').focus(), 0); }
     if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   });
@@ -278,7 +281,7 @@
     });
     zone.addEventListener('pointermove', e => {
       if (e.pointerId === stick.id) { stick.dx = Math.max(-1, Math.min(1, (e.clientX - stick.x0) / 50)); stick.dy = Math.max(-1, Math.min(1, (e.clientY - stick.y0) / 50)); $('knopf').style.transform = `translate(${stick.dx * 30}px,${stick.dy * 30}px)`; }
-      else if (e.pointerId === blick.id) { yaw -= (e.clientX - blick.x) * 0.006; pitch = Math.max(-0.9, Math.min(1.2, pitch + (e.clientY - blick.y) * 0.005)); blick.x = e.clientX; blick.y = e.clientY; }
+      else if (e.pointerId === blick.id) { yaw -= (e.clientX - blick.x) * 0.006 * einst.empf; pitch = Math.max(-0.9, Math.min(1.2, pitch + (e.clientY - blick.y) * 0.005 * einst.empf)); blick.x = e.clientX; blick.y = e.clientY; }
     });
     const los = e => { if (e.pointerId === stick.id) { stick.id = null; stick.dx = stick.dy = 0; $('stick').style.display = 'none'; $('knopf').style.transform = ''; } if (e.pointerId === blick.id) blick.id = null; };
     zone.addEventListener('pointerup', los); zone.addEventListener('pointercancel', los);
@@ -423,8 +426,30 @@
   let alt = performance.now();
   let echtAlt = performance.now();
   function bild() { requestAnimationFrame(bild); const j = performance.now(); fpsPruefen(Math.min(1, (j - echtAlt) / 1000)); echtAlt = j; bildSchritt(); }
+  /* Menühintergrund: das Gefängnis bei Nacht, die Kamera kreist langsam darüber (nicht auf Handys) */
+  let menuSzene = null, menuWelt = null, menuT = 0;
+  function menuHintergrund() {
+    if (menuSzene || touch || einst.grafik === 'niedrig' || modus === 'spiel') return;
+    try {
+      menuSzene = new T.Scene(); menuSzene.fog = new T.FogExp2(0x141a2a, 0.007);
+      menuWelt = KKW.bauen(menuSzene, KA.neu(), { grafik:'mittel' });
+      menuWelt.setStrom(true);
+      menuWelt.licht.spielerLicht.intensity = 0;
+    } catch (_) { menuSzene = menuWelt = null; }
+  }
+  function menuBild(dt) {
+    if (!menuSzene) return;
+    menuT += dt;
+    const w = menuT * 0.05, cx = 50, cz = 40;
+    kamera.position.set(cx + Math.cos(w) * 78, 30 + Math.sin(menuT * 0.12) * 4, cz + Math.sin(w) * 62);
+    kamera.lookAt(cx, 0, cz);
+    menuWelt.licht.mondLicht.position.set(cx - 40, 80, cz - 35); menuWelt.licht.mondLicht.target.position.set(cx, 0, cz);
+    menuWelt.update(dt, menuT, { ents:[], ich:{ x:cx, z:cz, e:0 }, toreOffen:false, blau:false, rot:false, heli:null });
+    renderer.render(menuSzene, kamera);
+  }
   function bildSchritt() {
     const jetzt = performance.now(), dt = Math.min(0.05, (jetzt - alt) / 1000); alt = jetzt;
+    if (modus === 'menu' || modus === 'lobby') { menuBild(dt); return; }
     if (modus !== 'spiel' && modus !== 'ende') return;
     if (!welt || !Z) { if (szene) renderer.render(szene, kamera); return; }
     const t = Z.t + (jetzt - posZeit) / 1000;
@@ -596,8 +621,27 @@
     // Mitspieler-Liste
     $('leute').innerHTML = Z.sp.map(s => `<div class="${s.z}${s.id === du ? ' ich' : ''}">${TIER_ICON[s.tier] || ''} ${esc(s.name)} ${s.z === 'frei' ? '✅' : s.z === 'iso' ? '🔒' : s.z === 'ko' ? '💫' : s.weg ? '📴' : ''}</div>`).join('');
   }
+  /* Tipp: nächster sinnvoller Schritt, Ziel erscheint auf der Minikarte */
+  let tippZiel = null, tippDistAlt = '';
+  function tippAktualisieren() {
+    const el = $('tipp');
+    if (!einst.tipps || !ich || ich.z !== 'aktiv' || Z.phase === 'ende') { el.hidden = true; tippZiel = null; return; }
+    const t = L.tipp(Z.items, { inv:ich.inv, x:me.x, z:me.z }, Z.strom);
+    tippZiel = t.x != null ? t : null;
+    el.hidden = false; $('tippText').textContent = t.text;
+  }
+  function tippUmschalten() {
+    einst.tipps = !einst.tipps; merken(); $('tippsAn').checked = einst.tipps;
+    if (einst.tipps) tippAktualisieren(); else $('tipp').hidden = true;
+  }
+  const RICHTUNG = ['Ost', 'Südost', 'Süd', 'Südwest', 'West', 'Nordwest', 'Nord', 'Nordost'];
   function hudBild(t) {
     if (!ich) return;
+    if (tippZiel) {
+      const dx = tippZiel.x - me.x, dz = tippZiel.z - me.z;
+      const txt = Math.round(Math.hypot(dx, dz)) + ' m ' + RICHTUNG[Math.round(Math.atan2(dz, dx) / (Math.PI / 4) + 8) % 8];
+      if (txt !== tippDistAlt) { tippDistAlt = txt; $('tippDist').textContent = txt; }
+    } else if (tippDistAlt) { tippDistAlt = ''; $('tippDist').textContent = ''; }
     const rest = Math.max(0, Z.dauer - t);
     $('uhr').textContent = Math.floor(rest / 60) + ':' + String(Math.floor(rest % 60)).padStart(2, '0');
     $('uhr').classList.toggle('knapp', rest < 60);
@@ -656,6 +700,17 @@
     for (const w of wachen) if (Math.hypot(w.x - me.x, w.z - me.z) < 20) punkt(w.x, w.z, w.anim === 4 ? '#777' : '#ff3b30', 4);
     if (pos) for (const [id] of pos.s) { if (id === du) continue; const f = figuren.get(id); if (f) punkt(f.x, f.z, '#ffb06a', 3.5); }
     for (const it of S.items) if (Math.hypot(it.x - me.x, it.z - me.z) < 20) punkt(it.x, it.z, '#f2e27a', 2);
+    // Tipp-Ziel: Ring auf der Karte, außerhalb als Pfeil am Rand
+    if (tippZiel) {
+      const tx = (tippZiel.x - sx) * s, tz = (tippZiel.z - sz) * s, m = c.width / 2, puls = 1 + Math.sin(performance.now() / 260) * 0.2;
+      x.strokeStyle = '#ff7a1a'; x.fillStyle = '#ff7a1a'; x.lineWidth = 2.5;
+      if (tx > 8 && tx < c.width - 8 && tz > 8 && tz < c.height - 8) { x.beginPath(); x.arc(tx, tz, 7 * puls, 0, 7); x.stroke(); x.beginPath(); x.arc(tx, tz, 2.5, 0, 7); x.fill(); }
+      else {
+        const a = Math.atan2(tz - m, tx - m), r = m - 10;
+        x.save(); x.translate(m + Math.cos(a) * r, m + Math.sin(a) * r); x.rotate(a);
+        x.beginPath(); x.moveTo(7 * puls, 0); x.lineTo(-5, 6); x.lineTo(-2, 0); x.lineTo(-5, -6); x.closePath(); x.fill(); x.restore();
+      }
+    }
     // ich als Pfeil
     x.save(); x.translate((me.x - sx) * s, (me.z - sz) * s); x.rotate(-me.r + Math.PI);
     x.fillStyle = '#fff'; x.beginPath(); x.moveTo(0, -7); x.lineTo(5, 5); x.lineTo(0, 2); x.lineTo(-5, 5); x.closePath(); x.fill(); x.restore();
@@ -674,6 +729,7 @@
     x.font = '22px sans-serif';
     for (const g of S.K.gitter) x.fillText(g.offen ? '🔓' : '▦', (g.x + 0.5) * gr, (g.z + 0.9) * gr);
     x.fillText('🚁', KA.OBJ.heli.x * gr, KA.OBJ.heli.z * gr);
+    if (tippZiel) x.fillText('🎯', tippZiel.x * gr, tippZiel.z * gr);
     x.fillText('🔧', KA.OBJ.werkbank.x * gr, (KA.OBJ.werkbank.z + 1.5) * gr);
     x.fillText('🔴', KA.OBJ.torschalter.x * gr, (KA.OBJ.torschalter.z + 1) * gr);
     x.shadowBlur = 0;
@@ -702,6 +758,7 @@
     modus = 'menu'; zeigeNur('menu');
     if (welt) spielAufraeumen();
     TON.sirene(false);
+    setTimeout(menuHintergrund, 60);
   }
   function tierWahl() {
     $('tiere').innerHTML = L.TIERE.map(t => `<button class="tier${t === einst.tier ? ' an' : ''}" data-t="${t}" title="${L.TIER_NAMEN[t]}"><span>${TIER_ICON[t]}</span><small>${L.TIER_NAMEN[t]}</small></button>`).join('');
@@ -717,6 +774,12 @@
     $(id).value = String(einst[k]);
     $(id).addEventListener('change', () => { einst[k] = zahl ? +$(id).value : $(id).value; merken(); if (id === 'grafik') hinweis('Grafik gilt nach dem Neuladen.'); });
   }
+  $('schwer').value = einst.schwer; $('schwer').addEventListener('change', () => { einst.schwer = $('schwer').value; merken(); });
+  $('laut').value = Math.round(einst.laut * 100); $('laut').addEventListener('input', () => { einst.laut = $('laut').value / 100; TON.laut(einst.laut); merken(); });
+  $('laut').addEventListener('change', () => { TON.start(); TON.piep(); });
+  $('empf').value = Math.round(einst.empf * 100); $('empf').addEventListener('input', () => { einst.empf = $('empf').value / 100; merken(); });
+  $('tippsAn').checked = einst.tipps; $('tippsAn').addEventListener('change', () => { einst.tipps = $('tippsAn').checked; merken(); });
+  $('tipp').addEventListener('click', tippUmschalten);
   $('tonAn').checked = einst.ton; $('tonAn').addEventListener('change', () => { einst.ton = $('tonAn').checked; TON.an(einst.ton); merken(); });
   const nameOk = () => { if (!einst.name) { einst.name = $('name').value.trim() || ('Häftling ' + (100 + Math.floor(Math.random() * 900))); $('name').value = einst.name; merken(); } };
   $('solo').addEventListener('click', () => {
@@ -769,6 +832,18 @@
     const frei = liste.filter(e => e.frei != null).length;
     $('eTitel').textContent = frei === liste.length ? 'Alle sind ausgebrochen!' : frei ? frei + ' von ' + liste.length + ' sind entkommen' : 'Niemand ist entkommen …';
     $('eListe').innerHTML = liste.map((e, i) => `<tr class="${e.id === du ? 'ich' : ''}"><td>${e.frei != null ? (i + 1) + '.' : '–'}</td><td>${TIER_ICON[e.tier] || ''} ${esc(e.name)}</td><td>${e.frei != null ? '✅ ' + fmt(e.frei) : '🔒 drin'}</td><td>${esc(e.wege.join(' + ') || '')}</td><td>${e.gefasst}× gefasst</td></tr>`).join('');
+    const m = liste.find(e => e.id === du);
+    const karten = [];
+    if (m) {
+      const draussen = m.frei != null;
+      karten.push([draussen ? fmt(m.frei) : '—', 'Deine Zeit', draussen ? 'gut' : 'schlecht']);
+      karten.push([draussen ? (m.wege.join(' + ') || 'zu Fuß') : 'drin', 'Dein Weg', draussen ? 'gut' : 'schlecht']);
+      karten.push([m.gefasst, 'Mal gefasst', m.gefasst ? 'schlecht' : 'gut']);
+      karten.push([m.kos, 'Wärter k.o.', '']);
+      if (draussen && liste.length > 1) karten.push([(liste.filter(e => e.frei != null).indexOf(m) + 1) + '.', 'Platz', '']);
+      if (netz && netz.lokal && Z.dauer && draussen) karten.push([Math.max(0, Math.round(100 - m.frei / Z.dauer * 60 - m.gefasst * 10)), 'Punkte', 'gut']);
+    }
+    $('eStat').innerHTML = karten.map(([w, b, k], i) => `<div class="stat ${k}" style="animation-delay:${i * 70}ms"><b>${esc(w)}</b><small>${b}</small></div>`).join('');
     const host = netz && (netz.lokal || (raum && raum.host === du));
     $('eNochmal').hidden = !host;
   }

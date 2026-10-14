@@ -12,6 +12,8 @@
   const TIERE = ['loewe', 'fuchs', 'waschbaer', 'pinguin', 'hase', 'baer', 'affe', 'panda', 'krokodil', 'schwein'];
   const TIER_NAMEN = { loewe:'Löwe', fuchs:'Fuchs', waschbaer:'Waschbär', pinguin:'Pinguin', hase:'Hase', baer:'Bär', affe:'Affe', panda:'Panda', krokodil:'Krokodil', schwein:'Schwein' };
   const MODI = ['jeder', 'banden', 'alle'];
+  // Wie schnell Wärter misstrauisch werden (Solo wählbar)
+  const SCHWER = { leicht:0.6, normal:1, schwer:1.5 };
 
   const ITEMS = {
     loeffel:{ name:'Löffel', illegal:false, grab:5, loch:8 },
@@ -289,6 +291,7 @@
       this.van = { x:KA.OBJ.van.x, z:KA.OBJ.van.z, r:KA.OBJ.van.r, v:0, fahrer:null, sitze:[], weg:false, bewegt:0 };
       this.heli = { x:KA.OBJ.heli.x, z:KA.OBJ.heli.z, sitze:[], startBis:0, weg:false };
       this.ereignisse = []; this.version = 1; this.ergebnis = null; this.ohneWache = !!o.ohneWache;
+      this.stufe = SCHWER[o.schwer] ? o.schwer : 'normal'; this.misstrauen = SCHWER[this.stufe];
       this.insassenAufstellen();
     }
     geaendert() { this.version++; }
@@ -794,7 +797,7 @@
       const h = sp.inv[sp.hand];
       if (h && ITEMS[h].illegal) r += sp.uniform ? 0.5 : 1.3;
       if (sp.anim === 2 && !sp.uniform) r += 0.15;     // Rennen ist ein bisschen auffällig
-      return r * (d < 6 ? 2 : 1);
+      return r * (d < 6 ? 2 : 1) * this.misstrauen;
     }
     jagen(g, sp) {
       if (g.zustand === 'ko') return;
@@ -1000,6 +1003,33 @@
     }
   }
 
+  /* Nächster sinnvoller Schritt für die Anzeige: aus Inventar und Gegenständen am Boden.
+     items = [[id, art, x, z, e], ...] wie in zustand(); Ergebnis { text, x?, z? } */
+  function tipp(items, sp, strom) {
+    const inv = sp.inv || [];
+    const zahl = a => inv.filter(i => i === a).length, hat1 = a => inv.includes(a);
+    const naechste = (...arten) => {
+      let b = null, bd = 1e9;
+      for (const it of items) if (arten.includes(it[1]) && (it[4] || 0) === 0) { const d = Math.hypot(it[2] - sp.x, it[3] - sp.z); if (d < bd) { bd = d; b = it; } }
+      return b;
+    };
+    const zu = (text, o) => ({ text, x:o.x, z:o.z });
+    if (hat1('helischluessel')) return zu('Heli-Schlüssel! Hoch aufs Dach zum Landeplatz.', KA.OBJ.heli);
+    if (hat1('vanschluessel')) return zu('Van-Schlüssel! Ab in die Garage, einsteigen und die Tore rammen.', KA.OBJ.van);
+    if (hat1('sprengstoff')) return { text:'Sprengstoff! Leg ihn an Mauer, Zaun oder Tor und geh in Deckung.' };
+    if (hat1('seil')) return zu('Lakenseil! Auf dem Dach an einem Haken befestigen und abseilen.', KA.OBJ.haken[0]);
+    if (zahl('laken') >= 2) return { text:'Zwei Laken in der Hand: Lakenseil knoten (E), dann aufs Dach.' };
+    if (hat1('duenger') && hat1('reiniger')) return zu('Dünger + Reiniger: Zur Werkbank und Sprengstoff mischen.', KA.OBJ.werkbank);
+    if (hat1('hammer') && strom) return zu('Hammer! Zertrümmere den Generator – dann ist der Zaun tot.', KA.OBJ.generator);
+    if (hat1('drahtschere') && !strom) return { text:'Zaun ist stromlos: Drahtschere benutzen und durch!' };
+    if (hat1('loeffel') || hat1('schaufel')) return { text:'Such dir eine Stelle ohne Wärter und grab: Loch, Tunnel unter Mauer und Zaun, dahinter hoch.' };
+    if (hat1('schraubenzieher')) return { text:'Schraubenzieher! Schraub ein Lüftungsgitter ab und kriech durch die Schächte.' };
+    if (hat1('duenger') || hat1('reiniger')) { const n = naechste(hat1('duenger') ? 'reiniger' : 'duenger'); if (n) return zu('Dir fehlt noch ' + (hat1('duenger') ? 'Reiniger (Wäscherei, Küche)' : 'Dünger (Garten)') + '.', { x:n[2], z:n[3] }); }
+    const n = naechste('loeffel', 'schaufel', 'schraubenzieher', 'hammer');
+    if (n) return zu('Besorg dir Werkzeug: ' + ITEMS[n[1]].name + ' liegt in der Nähe.', { x:n[2], z:n[3] });
+    return { text:'Such Werkzeug: Löffel (Kantine), Schaufel/Schraubenzieher (Werkstatt), Laken (Wäscherei).' };
+  }
+
   return { TAKT, DT, MAX_SPIELER, TIERE, TIER_NAMEN, MODI, ITEMS, UNIKAT, TEMPO, RADIUS, VAN, LICHT_R,
-    Spiel, frei, bewegen, vanSchritt, vanPunkte, scheinwerfer, moeglich, pfad, hat };
+    Spiel, frei, bewegen, vanSchritt, vanPunkte, scheinwerfer, moeglich, pfad, hat, tipp, SCHWER };
 });

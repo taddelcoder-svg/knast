@@ -1,10 +1,10 @@
 /* Knastknacker – kleine Geräusche aus dem WebAudio-Synth (keine Dateien). Abschaltbar. */
 (function () {
   'use strict';
-  let ctx = null, an = true, master = null, sirene = null;
+  let ctx = null, an = true, master = null, sirene = null, lautstaerke = 1;
   function start() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
-    try { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.35; master.connect(ctx.destination); } catch (_) { ctx = null; }
+    try { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.35 * lautstaerke; master.connect(ctx.destination); } catch (_) { ctx = null; }
   }
   function rauschen(dauer) {
     const n = Math.floor(ctx.sampleRate * dauer), b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
@@ -27,6 +27,7 @@
   const T = {
     start,
     an:v => { an = v; if (!v) T.sirene(false); },
+    laut:v => { lautstaerke = Math.max(0, Math.min(1, v)); if (master) master.gain.value = 0.35 * lautstaerke; },
     istAn:() => an,
     schlag:() => knall(0.12, 1800, 0.5),
     treffer:() => { knall(0.15, 900, 0.7); ton(120, 0.12, 'sine', 0.4, 60); },
