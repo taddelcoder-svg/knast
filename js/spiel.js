@@ -833,6 +833,7 @@ renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1
     $('eTitel').textContent = frei === liste.length ? 'Alle sind ausgebrochen!' : frei ? frei + ' von ' + liste.length + ' sind entkommen' : 'Niemand ist entkommen …';
     $('eListe').innerHTML = liste.map((e, i) => `<tr class="${e.id === du ? 'ich' : ''}"><td>${e.frei != null ? (i + 1) + '.' : '–'}</td><td>${TIER_ICON[e.tier] || ''} ${esc(e.name)}</td><td>${e.frei != null ? '✅ ' + fmt(e.frei) : '🔒 drin'}</td><td>${esc(e.wege.join(' + ') || '')}</td><td>${e.gefasst}× gefasst</td></tr>`).join('');
     const m = liste.find(e => e.id === du);
+    if (m && !Z.slGez) { Z.slGez = 1; window.SLZaehle && SLZaehle('sl_knast', s => { s.spiele = (s.spiele || 0) + 1; if (m.frei != null) { s.aus = (s.aus || 0) + 1; s.wege = s.wege || {}; (m.wege && m.wege.length ? m.wege : ['zu Fuß']).forEach(w => { s.wege[w] = 1; }); } }); }
     const karten = [];
     if (m) {
       const draussen = m.frei != null;
